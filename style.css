@@ -105,6 +105,7 @@ body {
   margin: 1px;
   height: 64px;
   width: 64px;
+  font-size: 22px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -113,6 +114,10 @@ body {
 .cell:hover {
   background-color: #eef;
   cursor: pointer;
+}
+
+.cell.editing {
+  background-color: #ddf;
 }
 
 .board { border-radius: var(--board-radius); }
