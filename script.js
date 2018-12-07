@@ -1,220 +1,302 @@
-// Get references
+const OPTIONS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+//
+// DOM references
+//
 const boardEl = document.querySelector('.board');
 const nextButtonEl = document.querySelector('button.next');
 const solveButtonEl = document.querySelector('button.solve');
 
-function getEditingCell() {
-  return document.querySelector('.cell.editing');
+// Data stores
+let editingCellIndex = -1;
+const cells = Array.from({ length: 81 }, (_, i) => {
+  return { value: ``, options: new Set() };
+});
+
+//
+// Rendering
+//
+function render() {
+  // If the board doesn't exist, render if for the first time with
+  // empty cells
+  if (document.querySelectorAll('.cell').length !== 81) {
+    boardEl.innerHTML = Array
+      .from({ length: 9 }, (_, i) => i)
+      .map(blockIndex => getCellIndexesForBlock(blockIndex))
+      .map(cellIndexes => {
+        const cellsHtml = cellIndexes
+          .map(i => `<div class="cell" data-cellindex="${i}"></div>`)
+          .join('');
+        return `<div class="block">${cellsHtml}</div>`
+      })
+      .join('');
+  }
+
+  // Render just what needs to be updated
+  cells.forEach((cell, i) => {
+    const cellEl = document.querySelector(`[data-cellindex="${i}"]`);
+
+    // Cell editing
+    if (i === editingCellIndex) {
+      cellEl.classList.add('editing')
+    } else {
+      cellEl.classList.remove('editing')
+    }
+
+    // Content
+    const cellValueEl = cellEl.querySelector('.cell__value');
+    const cellOptionsEl = cellEl.querySelector('.cell__options');
+
+    if (cell.value) {
+      // Show value element
+      const textContent = cell.value;
+      if (cellValueEl) {
+        cellValueEl.textContent = textContent;
+      } else {
+        cellEl.innerHTML = `<span class="cell__value">${textContent}</span>`
+      }
+    } else {
+      // Show options element
+      const textContent = Array.from(cell.options).join(' ');
+      if (cellOptionsEl) {
+        cellOptionsEl.textContent = textContent;
+      } else {
+        cellEl.innerHTML = `<span class="cell__options">${textContent}</span>`;
+      }
+    }
+  });
+
 }
 
+//
 // Event handlers
+//
 function handleDocumentClick(e) {
-  if (e.target.classList.contains('cell')) {
+  const parentCell = e.target.closest('.cell');
+  if (parentCell) {
     // Edit the clicked cell
-    const cellIndex = parseInt(e.target.dataset.cellindex);
-    cells.forEach(cell => cell.editing = false);
-    cells[cellIndex].editing = true;
-    renderBoard(cells, boardEl);
-    return;
-  } else if (getEditingCell()) {
+    editingCellIndex = parseInt(parentCell.dataset.cellindex);
+    return render();
+  } else {
     // Stop editing since the click was off-board
-    cells.forEach(cell => cell.editing = false);
-    renderBoard(cells, boardEl);
-    return;
+    editingCellIndex = -1;
+    return render();
   }
 }
 
 function handleNextClick() {
-  // Update possibilities
-  cells.forEach((cell, index) => {
-    if (cell.value) return;
-    const possible = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9'])
-    const neighbors = new Set([
-      ...getIndexesOnRow(index),
-      ...getIndexesOnColumn(index),
-      ...getIndexesOnBlock(index)]
-    );
-
-    neighbors.forEach(neighborIndex => {
-      const neighbor = cells[neighborIndex];
-      if (neighbor.value) possible.delete(neighbor.value);
-    });
-
-    cell.possible = possible;
-  });
-
-  const solutionCells = cells.filter(cell => cell.possible && cell.possible.size === 1);
-  if (solutionCells.length === 0) {
-    return null;
-  }
-
-  const cell = solutionCells[getRandomIntInclusive(0, solutionCells.length - 1)];
-  cell.value = [...cell.possible.values()][0];
-  cells.forEach(cell => delete cell.possible);
-
-  renderBoard(cells, boardEl);
-  return cell;
+  solve();
 }
 
 async function handleSolveClick() {
   const unsolved = cells.filter(c => !c.value).length;
   const timePerCell = Math.min(500, 3000 / unsolved); // solve in 3 seconds or less
-  while (handleNextClick()) {
+  while (solve()) {
     await new Promise(res => setTimeout(res, timePerCell));
   }
 }
 
 function handleKeydown(e) {
-  // Get the cell being actively edited
-  const editingCell = getEditingCell();
-  if (!editingCell) return;
-  const cellIndex = parseInt(editingCell.dataset.cellindex);
+  // Return if no cells are being edited
+  if (editingCellIndex < 0 || editingCellIndex > 80) return;
 
-  // Edit a cell value
+  // Edit a cell value if possible
   if ('123456789'.includes(e.key)) {
-    cells[cellIndex].value = e.key;
-    renderBoard(cells, boardEl);
-    return;
+    const cell = cells[editingCellIndex];
+    if (cell.options.has(e.key)) {
+      cells[editingCellIndex].value = e.key;
+      updateCellOptions();
+    }
+    return render();
   }
 
-  if (['Escape', 'Backspace'].includes(e.key)) {
+  if (['Escape', 'Backspace', '0'].includes(e.key)) {
     // Remove a cell value
-    cells[cellIndex].value = '';
-    renderBoard(cells, boardEl);
-    return;
+    cells[editingCellIndex].value = '';
+    updateCellOptions();
+    return render();
   }
 
   // Move left
-  if (e.key === 'ArrowLeft' && cellIndex % 9 > 0) {
-    cells[cellIndex].editing = false;
-    cells[cellIndex - 1].editing = true;
-    renderBoard(cells, boardEl);
-    return;
+  if (e.key === 'ArrowLeft' && editingCellIndex % 9 > 0) {
+    editingCellIndex -= 1;
+    return render();
   }
 
   // Move right
-  if (e.key === 'ArrowRight' && cellIndex % 9 < 8) {
-    cells[cellIndex].editing = false;
-    cells[cellIndex + 1].editing = true;
-    renderBoard(cells, boardEl);
-    return;
+  if (e.key === 'ArrowRight' && editingCellIndex % 9 < 8) {
+    editingCellIndex += 1;
+    return render();
   }
 
   // Move up
-  if (e.key === 'ArrowUp' && cellIndex > 8) {
-    cells[cellIndex].editing = false;
-    cells[cellIndex - 9].editing = true;
-    renderBoard(cells, boardEl);
-    return;
+  if (e.key === 'ArrowUp' && editingCellIndex > 8) {
+    editingCellIndex -= 9;
+    return render();
   }
 
   // Move down
-  if (e.key === 'ArrowDown' && cellIndex < 72) {
-    cells[cellIndex].editing = false;
-    cells[cellIndex + 9].editing = true;
-    renderBoard(cells, boardEl);
-    return;
+  if (e.key === 'ArrowDown' && editingCellIndex < 72) {
+    editingCellIndex += 9;
+    return render();
   }
 }
 
-// Initialize event handlers
+//
+// Util
+//
+function getCellIndexesForBlock(blockIndex) {
+  const firstIndex = (blockIndex % 3) * 3 + Math.floor(blockIndex / 3) * 27;
+  return [0, 1, 2, 9, 10, 11, 18, 19, 20].map(offset => firstIndex + offset);
+}
+
+function getCellIndexesForRow(rowIndex) {
+  return Array.from({ length: 9 }, (_, i) => rowIndex * 9 + i);
+}
+
+function getCellIndexesForColumn(colIndex) {
+  return Array.from({ length: 9 }, (_, i) => colIndex + i * 9);
+}
+
+const getRowIndex = cellIndex => Math.floor(cellIndex / 9);
+const getColumnIndex = cellIndex => cellIndex % 9;
+const getBlockIndex = cellIndex => Math.floor(cellIndex % 9 / 3) + 3 * Math.floor(cellIndex / 27);
+
+const getRowNeighbors = cellIndex => getCellIndexesForRow(getRowIndex(cellIndex));
+const getColumnNeighbors = cellIndex => getCellIndexesForColumn(getColumnIndex(cellIndex));
+const getBlockNeighbors = cellIndex => getCellIndexesForBlock(getBlockIndex(cellIndex));
+
+const onSameRow = cellIndexes => new Set(cellIndexes.map(i => getRowIndex(i))).size <= 1;
+const onSameColumn = cellIndexes => new Set(cellIndexes.map(i => getColumnIndex(i))).size <= 1;
+const onSameBlock = cellIndexes => new Set(cellIndexes.map(i => getBlockIndex(i))).size <= 1;
+
+function getUnsolvedValuesForCells(cellIndexes) {
+  const values = new Set();
+  cellIndexes.forEach(i => cells[i].options.forEach(val => values.add(val)));
+  return Array.from(values);
+}
+
+function updateCellOptions() {
+  // Set the possibilities wide open for every cell, except those that already have a value
+  cells.forEach(c => c.options = c.value ? new Set() : new Set(OPTIONS));
+
+  // Remove neighbor values from options
+  cells.forEach((c, i) => {
+    const neighborValues = [
+        ...getRowNeighbors(i),
+        ...getColumnNeighbors(i),
+        ...getBlockNeighbors(i),
+      ]
+      .map(neighborIndex => cells[neighborIndex].value)
+      .filter(neighborValue => !!neighborValue);
+    new Set(neighborValues).forEach(v => c.options.delete(v));
+  });
+
+  // Identify cells that are unique to their row, column, or block
+  Array
+    .from({ length: 9 }, (_, i) => i)
+    .forEach(axisIndex => {
+      const identifyUniqueAlongAxis = axisCellIndexes => {
+        const axisCells = axisCellIndexes.map(i => cells[i]);
+
+        // Tally the number of cells that have each value as an option
+        const tally = axisCells.reduce((accum, curr) => {
+          [...curr.options.values()].forEach(val => {
+            if (!accum[val]) accum[val] = 0;
+            accum[val]++;
+          });
+          return accum;
+        }, {});
+
+        // For all the value options that match just one cell, identify
+        // that one cell as unique by setting its options to just the value
+        const singles = Object.keys(tally).filter(v => tally[v] === 1);
+        singles.forEach(singleValue => {
+          const cellWithValue = axisCells.find(c => c.options.has(singleValue));
+          cellWithValue.options = new Set(singleValue);
+        });
+      };
+
+      identifyUniqueAlongAxis(getCellIndexesForRow(axisIndex));
+      identifyUniqueAlongAxis(getCellIndexesForColumn(axisIndex));
+      identifyUniqueAlongAxis(getCellIndexesForBlock(axisIndex));
+    });
+
+  // Candidate line
+  Array
+    .from({ length: 9 }, (_, i) => i)
+    .forEach(blockIndex => {
+      const blockCellIndexes = getCellIndexesForBlock(blockIndex);
+      getUnsolvedValuesForCells(blockCellIndexes).forEach(val => {
+        const cellIndexesWithVal = blockCellIndexes.filter(i => cells[i].options.has(val));
+        if (onSameRow(cellIndexesWithVal)) {
+          const rowNeighbors = getRowNeighbors(cellIndexesWithVal[0]);
+          const rowNeighborsOnOtherBlocks = rowNeighbors.filter(n => getBlockIndex(n) !== blockIndex);
+          rowNeighborsOnOtherBlocks.forEach(rowNeighbor => cells[rowNeighbor].options.delete(val));
+        } else if (onSameColumn(cellIndexesWithVal)) {
+          const colNeighbors = getColumnNeighbors(cellIndexesWithVal[0]);
+          const colNeighborsOnOtherBlocks = colNeighbors.filter(n => getBlockIndex(n) !== blockIndex);
+          colNeighborsOnOtherBlocks.forEach(colNeighbor => cells[colNeighbor].options.delete(val));
+        }
+      });
+    });
+
+  // Double pair / multiple lines
+  Array.from({ length: 9 }, (_, i) => i)
+    .forEach(axisIndex => {
+      const colCellIndexes = getCellIndexesForColumn(axisIndex);
+      getUnsolvedValuesForCells(colCellIndexes).forEach(val => {
+        const cellIndexesWithVal = colCellIndexes.filter(i => cells[i].options.has(val));
+        if (onSameBlock(cellIndexesWithVal)) {
+          const blockNeighbors = getBlockNeighbors(cellIndexesWithVal[0]);
+          const blockNeighborsOnOtherCol = blockNeighbors.filter(n => getColumnIndex(n) !== axisIndex);
+          blockNeighborsOnOtherCol.forEach(blockNeighbor => cells[blockNeighbor].options.delete(val));
+        }
+      });
+
+      const rowCellIndexes = getCellIndexesForRow(axisIndex);
+      getUnsolvedValuesForCells(rowCellIndexes).forEach(val => {
+        const cellIndexesWithVal = rowCellIndexes.filter(i => cells[i].options.has(val));
+        if (onSameBlock(cellIndexesWithVal)) {
+          const blockNeighbors = getBlockNeighbors(cellIndexesWithVal[0]);
+          const blockNeighborsOnOtherRow = blockNeighbors.filter(n => getRowIndex(n) !== axisIndex);
+          blockNeighborsOnOtherRow.forEach(blockNeighbor => cells[blockNeighbor].options.delete(val));
+        }
+      });
+    });
+}
+
+function solve() {
+  const solutionCells = cells.filter(cell => cell.options.size === 1);
+  if (!solutionCells.length) {
+    alert(`Sorry, I'm not smart enough to help you cheat anymore.`)
+    return;
+  }
+
+  const cell = solutionCells[0];
+  cell.value = [...cell.options.values()][0];
+  updateCellOptions();
+  render();
+  return cell;
+}
+
+//
+// Attach event handlers
+//
 nextButtonEl.addEventListener('click', handleNextClick);
 solveButtonEl.addEventListener('click', handleSolveClick);
 document.addEventListener('keydown', handleKeydown);
 document.addEventListener('click', handleDocumentClick);
 
-// Initialize board
-const cells = Array.from({ length: 81 }, (_, i) => {
-  return { value: ``, editing: false };
-});
-
+//
 // TODO remove this demo
-const DEMO = ["5", "3", "", "", "7", "", "", "", "", "6", "", "", "1", "9", "5", "", "", "", "", "9", "8", "", "", "", "", "6", "", "8", "", "", "", "6", "", "", "", "3", "4", "", "", "8", "", "3", "", "", "1", "7", "", "", "", "2", "", "", "", "6", "", "6", "", "", "", "", "2", "8", "", "", "", "", "4", "1", "9", "", "", "5", "", "", "", "", "8", "", "", "7", "9"];
-DEMO.forEach((v,i) => cells[i].value = v);
+//
+// const DEMO_1  = '530070000600195000098000060800060003400803001700020006060000280000419005000080079';
+// const DEMO_2 = '300420900070900300009005000090003000028794610000600020000100700001007090002049001';
+// DEMO_2.split('').map((v, i) => ({ v, i })).filter(x => x.v !== '0').forEach(x => cells[x.i].value = x.v);
+// updateCellOptions();
+//
+// TODO remove this demo
+//
 
-renderBoard(cells, boardEl);
-
-function renderBoard(cells, el) {
-  // Validate that only one cell is being edited
-  if (cells.filter(c => c.editing).length > 1) {
-    throw Error('Invalid board. Multiple edited cells');
-  }
-
-  const blocks = Array.from({ length: 9 }, (_, i) => i)
-    .map(blockIndex => getIndexesForBlock(blockIndex))
-    .map(cellIndexes => {
-      const cellsHtml = cellIndexes
-        .map(i => {
-          const cell = cells[i];
-          const classes = ['cell', cell.editing ? 'editing' : null].filter(x => x);
-          return `<div class="${classes.join(' ')}" data-cellindex="${i}">${cell.value}</div>`
-        })
-        .join('');
-      return `<div class="block">${cellsHtml}</div>`
-    })
-    .join('');
-
-  el.innerHTML = blocks;
-}
-
-function getIndexesForBlock(blockNumber) {
-  if (blockNumber < 0 || blockNumber > 9) throw Error('Invalid block number');
-  const col = blockNumber % 3;
-  const row = Math.floor(blockNumber / 3);
-  const first = col * 3 + row * 27;
-
-  return [
-    first,
-    first + 1,
-    first + 2,
-    first + 9,
-    first + 10,
-    first + 11,
-    first + 18,
-    first + 19,
-    first + 20,
-  ];
-}
-
-function getIndexesOnRow(cellIndex) {
-  const row = Math.floor(cellIndex / 9);
-  const first = row * 9;
-  return [
-    first,
-    first + 1,
-    first + 2,
-    first + 3,
-    first + 4,
-    first + 5,
-    first + 6,
-    first + 7,
-    first + 8,
-  ];
-}
-
-function getIndexesOnColumn(cellIndex) {
-  const col = cellIndex % 9;
-  const first = col;
-  return [
-    first,
-    first + 1 * 9,
-    first + 2 * 9,
-    first + 3 * 9,
-    first + 4 * 9,
-    first + 5 * 9,
-    first + 6 * 9,
-    first + 7 * 9,
-    first + 8 * 9,
-  ];
-}
-
-function getIndexesOnBlock(cellIndex) {
-  const blockSets = Array.from({ length: 9 }, (_, i) => getIndexesForBlock(i));
-  return blockSets.find(set => set.includes(cellIndex));
-}
-
-function getRandomIntInclusive(min, max) {
-  min = Math.ceil(min);
-  max = Math.floor(max);
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
+render();

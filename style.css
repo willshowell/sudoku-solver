@@ -29,9 +29,7 @@ body {
 }
 
 /*
- *
  * TITLE
- *
  */
 .title {
   font-size: 40px;
@@ -43,9 +41,7 @@ body {
 }
 
 /*
- *
  * CONTROLS
- *
  */
 .controls {
   margin-top: 32px;
@@ -83,9 +79,7 @@ body {
 }
 
 /*
- *
  * BOARD
- *
  */
 .board {
   display: grid;
@@ -101,11 +95,9 @@ body {
 
 .cell {
   background-color: white;
-  padding: 20px;
   margin: 1px;
   height: 64px;
   width: 64px;
-  font-size: 22px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -118,6 +110,19 @@ body {
 
 .cell.editing {
   background-color: #ddf;
+}
+
+.cell__options {
+  padding: 5px;
+  font-size: 10px;
+  align-self: flex-start;
+  color: #AAA;
+}
+
+.cell__value {
+  font-size: 28px;
+  font-weight: 700;
+  align-self: center;
 }
 
 .board { border-radius: var(--board-radius); }
