@@ -10,7 +10,7 @@ const solveButtonEl = document.querySelector('button.solve');
 // Data stores
 let editingCellIndex = -1;
 const cells = Array.from({ length: 81 }, (_, i) => {
-  return { value: ``, options: new Set() };
+  return { value: ``, options: new Set(OPTIONS) };
 });
 
 //
